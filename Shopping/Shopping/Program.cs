@@ -6,6 +6,10 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddControllersWithViews();
 
+
+// se configura la inyeccion de dependencias, cada vez que se necesita la bd se la pasa el constructor
+//servicio para la creacion de la BD, se trae el contexto de datos que esta en la carpeta Data - Entitied
+// se crea exprecion landa  para la conexion de la bd, el string de conexion se encuentra en appsetings.json
 builder.Services.AddDbContext<DataContext>(o =>
 {
     o.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));

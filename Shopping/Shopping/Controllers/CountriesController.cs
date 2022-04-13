@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Shopping.Data;
 using Shopping.Data.Entities;
+using Shopping.Models;
 
 namespace Shopping.Controllers
 {
@@ -18,10 +19,12 @@ namespace Shopping.Controllers
         // GET: Countries
         public async Task<IActionResult> Index()
         {
-            return View(await _context.Countries.ToListAsync());
+            return View(await _context.Countries
+                .Include(c => c.States)
+                .ToListAsync());
         }
 
-        // GET: Countries/Details/5
+        // GET: Countries/Details
         public async Task<IActionResult> Details(int? id)
         {
             if (id == null)
@@ -29,7 +32,9 @@ namespace Shopping.Controllers
                 return NotFound();
             }
 
-            Country country = await _context.Countries.FirstOrDefaultAsync(m => m.Id == id);
+            Country country = await _context.Countries
+                .Include(c => c.States)
+                .FirstOrDefaultAsync(m => m.Id == id);
             if (country == null)
             {
                 return NotFound();
@@ -41,9 +46,9 @@ namespace Shopping.Controllers
         // GET: Countries/Create
         public IActionResult Create()
         {
-            return View();
+            Country country = new() { States = new List<State>() };
+            return View(country);
         }
-
      
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -77,25 +82,88 @@ namespace Shopping.Controllers
 
         }
 
-        // GET: Countries/Edit/5
-        public async Task<IActionResult> Edit(int? id)
+        // GET: Countries/AddState
+        public async Task<IActionResult> AddState(int? id)
         {
-            if (id == null)
+            if(id == null)
             {
                 return NotFound();
+            }  
+            Country country = await _context.Countries.FindAsync(id);
+
+            if (country == null)
+            { 
+                return NotFound(); 
             }
 
-            var country = await _context.Countries.FindAsync(id);
-            if (country == null)
+            StateViewModel model = new()
             {
-                return NotFound();
-            }
-            return View(country);
+                CountryId = country.Id,
+            };
+
+            return View(model);
         }
 
-        // POST: Countries/Edit/5
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
+        // POST: Countries/AddState
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddState(StateViewModel model)
+        {
+            if (ModelState.IsValid)
+            {
+                try
+                {
+                    State state = new()
+                    {
+                        Cities = new List<City>(),
+                        Country = await _context.Countries.FindAsync(model.CountryId),
+                        Name = model.Name,
+
+                    };
+
+                    _context.Add(state);
+                    await _context.SaveChangesAsync();
+                    return RedirectToAction(nameof(Details), new {id = model.CountryId});
+                }
+                catch (DbUpdateException dbUpdateException)
+                {
+                    if (dbUpdateException.InnerException.Message.Contains("duplicate"))
+                    {
+                        ModelState.AddModelError(string.Empty, "Ya existe un departamento/estado con el mismo nombre en este país");
+                    }
+                    else
+                    {
+                        ModelState.AddModelError(string.Empty, dbUpdateException.InnerException.Message);
+                    }
+                }
+                catch (Exception exception)
+                {
+                    ModelState.AddModelError(string.Empty, exception.Message);
+                }
+            }
+            return View(model);
+
+        }
+
+
+
+        // GET: Countries/Edit
+        public async Task<IActionResult> Edit(int? id)
+    {
+        if (id == null)
+        {
+            return NotFound();
+        }
+
+        var country = await _context.Countries.FindAsync(id);
+        if (country == null)
+        {
+            return NotFound();
+        }
+        return View(country);
+    }
+
+        // POST: Countries/Edit     
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(int id,  Country country)
@@ -133,7 +201,79 @@ namespace Shopping.Controllers
 
         }
 
-        // GET: Countries/Delete/5
+
+        // GET: Countries/EditStates
+        public async Task<IActionResult> EditState(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            State state = await _context.States
+                .Include(s => s.Country)
+                .FirstOrDefaultAsync(s => s.Id ==id);
+            if (state == null)
+            {
+                return NotFound();
+            }
+
+            StateViewModel model = new()
+            {
+                CountryId = state.Country.Id,
+                Id = state.Id,
+                Name = state.Name,
+            };
+            return View(model);
+        }
+
+        // POST: Countries/Edit     
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> EditState(int id, StateViewModel model)
+        {
+            if (id != model.Id)
+            {
+                return NotFound();
+            }
+
+            if (ModelState.IsValid)
+            {
+                try
+                {
+                    State state = new State()
+                    { 
+                        Id = model.Id,
+                        Name = model.Name,
+                    };
+                    _context.Update(state);
+                    await _context.SaveChangesAsync();
+                    return RedirectToAction(nameof(Details),new {Id = model.CountryId});
+                }
+                catch (DbUpdateException dbUpdateException)
+                {
+                    if (dbUpdateException.InnerException.Message.Contains("duplicate"))
+                    {
+                        ModelState.AddModelError(string.Empty, "Ya existe un departamento/estado con el mismo nombre en este país.");
+                    }
+                    else
+                    {
+                        ModelState.AddModelError(string.Empty, dbUpdateException.InnerException.Message);
+                    }
+                }
+                catch (Exception exception)
+                {
+                    ModelState.AddModelError(string.Empty, exception.Message);
+                }
+            }
+            return View(model);
+
+        }
+
+
+
+
+        // GET: Countries/Delete
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
@@ -142,7 +282,8 @@ namespace Shopping.Controllers
             }
 
             var country = await _context.Countries
-                .FirstOrDefaultAsync(m => m.Id == id);
+                .Include (c => c.States)
+                .FirstOrDefaultAsync(c => c.Id == id);
             if (country == null)
             {
                 return NotFound();
@@ -151,7 +292,7 @@ namespace Shopping.Controllers
             return View(country);
         }
 
-        // POST: Countries/Delete/5
+        // POST: Countries/Delete
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
